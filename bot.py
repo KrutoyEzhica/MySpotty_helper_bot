@@ -53,14 +53,13 @@ def get_main_keyboard():
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text="🎲 Случайная песня", callback_data="random"), 
-             InlineKeyboardButton(text="📊 Счёт", callback_data="count")]
+             InlineKeyboardButton(text="📊 Счёт", callback_data="count")],
+             [InlineKeyboardButton(text="🔍 Найти трек", callback_data="find")]
         ]
     )
     return keyboard
 
-def build_random_song_text():
-    playlist = load_playlist()
-    song = random.choice(playlist)
+def build_song_text(song):
     name = song["name"]
     artist = song["artist"] or '-'
     minutes, seconds = divmod(int(song["duration"]), 60)
@@ -68,10 +67,35 @@ def build_random_song_text():
     return mes
 
 
+def build_random_song_text():
+    playlist = load_playlist()
+    song = random.choice(playlist)
+    return build_song_text(song)
+
+
+
 def build_count_text():
     playlist = load_playlist()
     word = noun.make_agree_with_number(len(playlist)).word
     return f"В плейлисте {len(playlist)} {word}."
+
+
+def build_find_text(query):
+    if len(query) > 1:
+        query = query[-1].lower()
+        playlist = load_playlist()
+        result = [build_song_text(song) for song in playlist if query in song["name"].lower() or query in (song["artist"] or "").lower()]
+        if result:
+            word = noun.make_agree_with_number(len(result)).word
+            return f"Нашёл: {len(result)} {word}:" + "\n\n" + "\n\n".join(result)
+        return f'Ничего не найдено по запросу "{query}".'
+    return "Напиши, что искать. Пример: /find club"
+
+
+
+@dp.message(CommandStart())
+async def command_start_handler(message: Message) -> None:
+    await message.answer(f"Привет, {html.bold(message.from_user.full_name)}!", reply_markup=get_main_keyboard())
 
 
 @dp.callback_query()
@@ -82,6 +106,9 @@ async def on_callback(callback: CallbackQuery) -> None:
     elif callback.data == "count":
         await callback.answer()  # просто подтверждение, без текста
         await callback.message.answer(build_count_text())  # сообщение в чат
+    elif callback.data == "find":
+        await callback.answer()  # просто подтверждение, без текста
+        await callback.message.answer("Напиши команду /find и запрос. Пример: /find club")  # сообщение в чат
 
 
 @dp.message(Command("random"))
@@ -94,9 +121,9 @@ async def cmd_count(message: Message) -> None:
     await message.answer(build_count_text())
 
 
-@dp.message(CommandStart())
-async def command_start_handler(message: Message) -> None:
-    await message.answer(f"Привет, {html.bold(message.from_user.full_name)}!", reply_markup=get_main_keyboard())
+@dp.message(Command("find"))
+async def cmd_find(message: Message) -> None:
+    await message.answer(build_find_text(message.text.split(maxsplit=1)))
 
 
 @dp.message()
