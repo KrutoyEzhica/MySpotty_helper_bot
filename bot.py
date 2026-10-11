@@ -1,4 +1,5 @@
 from dotenv import load_dotenv
+import pymorphy3
 import asyncio
 import logging
 import json, random
@@ -9,17 +10,39 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.filters import CommandStart, Command
 from aiogram.types import (Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton)
+from aiogram import BaseMiddleware
+from aiogram.types import TelegramObject
+from typing import Any, Awaitable, Callable, Dict
 
 
+#class AccessMiddleware(BaseMiddleware):
+#    def __init__(self, admin_id: int):
+#        self.admin_id = admin_id
+#
+#    async def __call__(
+#        self,
+#        handler: Callable[[TelegramObject, Dict[str, Any]], Awaitable[Any]],
+#        event: TelegramObject,
+#        data: Dict[str, Any],
+#    ) -> Any:
+#        user = getattr(event, "from_user", None)
+#        if user and user.id != self.admin_id:
+#            return
+#        return await handler(event, data)
+
+morph = pymorphy3.MorphAnalyzer()
+noun = morph.parse('песня')[0]
 load_dotenv()
 TOKEN = os.getenv("BOT_TOKEN")
+ADMIN_ID = int(os.getenv("ADMIN_ID"))
 if not TOKEN:
     raise ValueError("Не найден BOT_TOKEN. Проверь файл .env")
 
 PLAYLIST_PATH = Path(__file__).parent / "playlist.json"
 
 dp = Dispatcher()
-
+#dp.message.middleware(AccessMiddleware(admin_id=ADMIN_ID))
+#dp.callback_query.middleware(AccessMiddleware(admin_id=ADMIN_ID))
 
 def load_playlist():
     with open(PLAYLIST_PATH, "r", encoding="utf-8") as f:
@@ -47,7 +70,8 @@ def build_random_song_text():
 
 def build_count_text():
     playlist = load_playlist()
-    return f"В плейлисте {len(playlist)} песен."
+    word = noun.make_agree_with_number(len(playlist)).word
+    return f"В плейлисте {len(playlist)} {word}."
 
 
 @dp.callback_query()
