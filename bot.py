@@ -8,7 +8,8 @@ from aiogram import Bot, Dispatcher, html
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.filters import CommandStart, Command
-from aiogram.types import Message
+from aiogram.types import (Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton)
+
 
 load_dotenv()
 TOKEN = os.getenv("BOT_TOKEN")
@@ -25,27 +26,53 @@ def load_playlist():
         playlist = json.load(f)
     return playlist
 
+def get_main_keyboard():
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="🎲 Случайная песня", callback_data="random"), 
+             InlineKeyboardButton(text="📊 Счёт", callback_data="count")]
+        ]
+    )
+    return keyboard
 
-@dp.message(Command("random"))
-async def cmd_random(message: Message) -> None:
+def build_random_song_text():
     playlist = load_playlist()
     song = random.choice(playlist)
     name = song["name"]
     artist = song["artist"] or '-'
     minutes, seconds = divmod(int(song["duration"]), 60)
     mes = f"🎵 {name}\n👤 {artist}\n⏱ {minutes:02d}:{seconds:02d}"
-    await message.answer(mes)
+    return mes
+
+
+def build_count_text():
+    playlist = load_playlist()
+    return f"В плейлисте {len(playlist)} песен."
+
+
+@dp.callback_query()
+async def on_callback(callback: CallbackQuery) -> None:
+    if callback.data == "random":
+        await callback.answer()  # просто подтверждение, без текста
+        await callback.message.answer(build_random_song_text())  # сообщение в чат
+    elif callback.data == "count":
+        await callback.answer()  # просто подтверждение, без текста
+        await callback.message.answer(build_count_text())  # сообщение в чат
+
+
+@dp.message(Command("random"))
+async def cmd_random(message: Message) -> None:
+    await message.answer(build_random_song_text())
 
 
 @dp.message(Command("count"))
 async def cmd_count(message: Message) -> None:
-    playlist = load_playlist()
-    await message.answer(f"В плейлисте {len(playlist)} песен.")
+    await message.answer(build_count_text())
 
 
 @dp.message(CommandStart())
 async def command_start_handler(message: Message) -> None:
-    await message.answer(f"Привет, {html.bold(message.from_user.full_name)}!")
+    await message.answer(f"Привет, {html.bold(message.from_user.full_name)}!", reply_markup=get_main_keyboard())
 
 
 @dp.message()
