@@ -9,7 +9,8 @@ from aiogram import Bot, Dispatcher, html
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.filters import CommandStart, Command
-from aiogram.types import (Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton)
+from aiogram.types import (
+    Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, FSInputFile)
 from aiogram import BaseMiddleware
 from aiogram.types import TelegramObject
 from typing import Any, Awaitable, Callable, Dict
@@ -69,11 +70,20 @@ def build_song_text(song):
     return mes
 
 
-def build_random_song_text():
+def pick_random_song():
     playlist = load_playlist()
-    song = random.choice(playlist)
-    return build_song_text(song)
+    index = random.randrange(len(playlist))
+    return playlist[index], index
 
+
+def get_audio_keyboard(index):
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[[
+            InlineKeyboardButton(text="⬇️ Отправить файл",
+                                 callback_data=f"send_audio:{index}")
+        ]]
+    )
+    return keyboard
 
 
 def build_count_text():
@@ -118,7 +128,20 @@ async def command_start_handler(message: Message) -> None:
 async def on_callback(callback: CallbackQuery) -> None:
     if callback.data == "random":
         await callback.answer()  # просто подтверждение, без текста
-        await callback.message.answer(build_random_song_text())  # сообщение в чат
+        song, idx = pick_random_song()
+        # сообщение в чат
+        await callback.message.answer(build_song_text(song), reply_markup=get_audio_keyboard(idx))
+    elif "send_audio" in callback.data:
+        await callback.answer()
+        playlist = load_playlist()
+        idx = int(callback.data.split(":")[1])
+        song = playlist[int(idx)]
+        audio = FSInputFile(song["path"])
+        await callback.message.answer_audio(
+            audio,
+            title=song["name"],
+            performer=song["artist"] or "-",
+        )
     elif callback.data == "count":
         await callback.answer()  # просто подтверждение, без текста
         await callback.message.answer(build_count_text())  # сообщение в чат
@@ -132,7 +155,8 @@ async def on_callback(callback: CallbackQuery) -> None:
 
 @dp.message(Command("random"))
 async def cmd_random(message: Message) -> None:
-    await message.answer(build_random_song_text())
+    song, idx = pick_random_song()
+    await message.answer(build_song_text(song), reply_markup=get_audio_keyboard(idx))
 
 
 #@dp.message(Command("send"))
