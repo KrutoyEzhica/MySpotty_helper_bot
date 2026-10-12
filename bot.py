@@ -15,20 +15,20 @@ from aiogram.types import TelegramObject
 from typing import Any, Awaitable, Callable, Dict
 
 
-#class AccessMiddleware(BaseMiddleware):
-#    def __init__(self, admin_id: int):
-#        self.admin_id = admin_id
-#
-#    async def __call__(
-#        self,
-#        handler: Callable[[TelegramObject, Dict[str, Any]], Awaitable[Any]],
-#        event: TelegramObject,
-#        data: Dict[str, Any],
-#    ) -> Any:
-#        user = getattr(event, "from_user", None)
-#        if user and user.id != self.admin_id:
-#            return
-#        return await handler(event, data)
+class AccessMiddleware(BaseMiddleware):
+    def __init__(self, admin_id: int):
+        self.admin_id = admin_id
+
+    async def __call__(
+        self,
+        handler: Callable[[TelegramObject, Dict[str, Any]], Awaitable[Any]],
+        event: TelegramObject,
+        data: Dict[str, Any],
+    ) -> Any:
+        user = getattr(event, "from_user", None)
+        if user and user.id != self.admin_id:
+            return
+        return await handler(event, data)
 
 morph = pymorphy3.MorphAnalyzer()
 noun = morph.parse('песня')[0]
@@ -41,8 +41,8 @@ if not TOKEN:
 PLAYLIST_PATH = Path(__file__).parent / "playlist.json"
 
 dp = Dispatcher()
-#dp.message.middleware(AccessMiddleware(admin_id=ADMIN_ID))
-#dp.callback_query.middleware(AccessMiddleware(admin_id=ADMIN_ID))
+dp.message.middleware(AccessMiddleware(admin_id=ADMIN_ID))
+dp.callback_query.middleware(AccessMiddleware(admin_id=ADMIN_ID))
 
 def load_playlist():
     with open(PLAYLIST_PATH, "r", encoding="utf-8") as f:
@@ -53,9 +53,11 @@ def get_main_keyboard():
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text="🎲 Случайная песня", callback_data="random"), 
-             InlineKeyboardButton(text="📊 Счёт", callback_data="count")],
-             [InlineKeyboardButton(text="🔍 Найти трек", callback_data="find")]
-        ]
+             InlineKeyboardButton(text="📊 Счёт", callback_data="count")], 
+            [InlineKeyboardButton(text="🔍 Найти трек", callback_data="find"),
+             InlineKeyboardButton(text="❓ Помощь", callback_data="help")]
+        ],
+        
     )
     return keyboard
 
@@ -92,10 +94,24 @@ def build_find_text(query):
     return "Напиши, что искать. Пример: /find club"
 
 
+def build_start_text(message):
+    return f"""Привет, {html.bold(message)}! 👋
+
+Я — бот-помощник для твоего плейлиста.
+
+Что я умею:
+🎲 /random — случайная песня
+📊 /count — сколько песен в плейлисте
+🔍 /find {html.quote('<текст>')} — поиск по названию или артисту
+❓ /help — эта справка
+
+Или нажми на кнопку ниже 👇"""
+
+
 
 @dp.message(CommandStart())
 async def command_start_handler(message: Message) -> None:
-    await message.answer(f"Привет, {html.bold(message.from_user.full_name)}!", reply_markup=get_main_keyboard())
+    await message.answer(build_start_text(message.from_user.full_name), reply_markup=get_main_keyboard())
 
 
 @dp.callback_query()
@@ -109,11 +125,19 @@ async def on_callback(callback: CallbackQuery) -> None:
     elif callback.data == "find":
         await callback.answer()  # просто подтверждение, без текста
         await callback.message.answer("Напиши команду /find и запрос. Пример: /find club")  # сообщение в чат
+    elif callback.data == "help":
+        await callback.answer()  # просто подтверждение, без текста
+        await callback.message.answer(build_start_text(callback.from_user.full_name), reply_markup=get_main_keyboard())
 
 
 @dp.message(Command("random"))
 async def cmd_random(message: Message) -> None:
     await message.answer(build_random_song_text())
+
+
+#@dp.message(Command("send"))
+#async def cmd_send(message: Message) -> None:
+#    await message.answer_audio("C:\\Users\\legion\\Music\\audio.mp3")
 
 
 @dp.message(Command("count"))
@@ -124,6 +148,11 @@ async def cmd_count(message: Message) -> None:
 @dp.message(Command("find"))
 async def cmd_find(message: Message) -> None:
     await message.answer(build_find_text(message.text.split(maxsplit=1)))
+
+
+@dp.message(Command("help"))
+async def cmd_help(message: Message) -> None:
+    await message.answer(build_start_text(message.from_user.full_name), reply_markup=get_main_keyboard())
 
 
 @dp.message()
